@@ -2,6 +2,8 @@
 
 ImageCanvas is a native macOS visual reference board for arranging locally stored images on a canvas.
 
+![ImageCanvas preview](assets/imagecanvas-preview.png)
+
 ## Features
 
 - Import images from files or folders without modifying the originals.
