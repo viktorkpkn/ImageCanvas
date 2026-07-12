@@ -260,11 +260,14 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
     func setBoard(_ nextBoard: BoardProject) {
         let didSwitchBoards = nextBoard.id != board.id
         let wasEmpty = board.items.isEmpty
-        let shouldFitAfterLoad = didSwitchBoards || (wasEmpty && !nextBoard.items.isEmpty)
+        let shouldFitAfterLoad = !didSwitchBoards && wasEmpty && !nextBoard.items.isEmpty
 
         if didSwitchBoards {
             cancelTextEditing()
             clearDrawingSession()
+            pendingUndoSnapshot = nil
+            undoStack.removeAll()
+            redoStack.removeAll()
         } else if editingTextID != nil {
             return
         }
@@ -308,6 +311,10 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
         observers.append(center.addObserver(forName: .imageCanvasRedo, object: nil, queue: .main) { [weak self] _ in self?.performRedo() })
         observers.append(center.addObserver(forName: .imageCanvasRedoDrawing, object: nil, queue: .main) { [weak self] _ in self?.performDrawingRedoShortcut() })
         observers.append(center.addObserver(forName: .imageCanvasClearDrawings, object: nil, queue: .main) { [weak self] _ in self?.clearDrawingSession() })
+        observers.append(center.addObserver(forName: .imageCanvasApplyFolderUpdate, object: nil, queue: .main) { [weak self] notification in
+            guard let items = notification.object as? [BoardItem] else { return }
+            self?.applyFolderUpdate(items)
+        })
     }
 
     override func viewDidMoveToWindow() {
@@ -1377,6 +1384,39 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
 
         if !arrangingSelection {
             fitAll()
+        }
+    }
+
+    private func applyFolderUpdate(_ items: [BoardItem]) {
+        let existingPaths = Set(board.items.filter(\.isImage).map(\.filePath))
+        let uniqueItems = items.filter { !existingPaths.contains($0.filePath) }
+        guard !uniqueItems.isEmpty else { return }
+
+        var arrangedItems = LayoutEngine.picasaLayout(items: uniqueItems)
+        let arrangedBounds = LayoutEngine.boundingRect(for: arrangedItems.map(\.frame.cgRect))
+        let visibleCenter = canvasPoint(from: CGPoint(x: bounds.midX, y: bounds.midY))
+        let translation = CGPoint(
+            x: visibleCenter.x - arrangedBounds.midX,
+            y: visibleCenter.y - arrangedBounds.midY
+        )
+
+        arrangedItems = arrangedItems.map { item in
+            var copy = item
+            copy.frame = CanvasRect(copy.frame.cgRect.offsetBy(dx: translation.x, dy: translation.y))
+            return copy
+        }
+
+        let insertedIDs = Set(arrangedItems.map(\.id))
+        let acknowledgedPaths = Set(arrangedItems.map(\.filePath))
+        let previousKnownPaths = Set(
+            board.knownFolderImagePaths
+                ?? board.items.filter(\.isImage).map(\.filePath)
+        )
+
+        mutateWithUndo {
+            board.items.append(contentsOf: arrangedItems)
+            board.knownFolderImagePaths = Array(previousKnownPaths.union(acknowledgedPaths)).sorted()
+            selectedIDs = insertedIDs
         }
     }
 

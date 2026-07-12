@@ -4,6 +4,7 @@ import Foundation
 final class BoardStore: ObservableObject {
     @Published private(set) var board: BoardProject
     @Published private(set) var recents: [RecentBoard]
+    @Published private(set) var pendingFolderItems: [BoardItem] = []
 
     let imageCache = ImageCache()
 
@@ -13,6 +14,8 @@ final class BoardStore: ObservableObject {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     private var folderImportToken = UUID()
+    private var scannedFolderBoardID: UUID?
+    private var scannedFolderItemsByPath: [String: BoardItem] = [:]
 
     init() {
         let fileManager = FileManager.default
@@ -42,9 +45,14 @@ final class BoardStore: ObservableObject {
             Self.loadBoard(from: URL(fileURLWithPath: recent.boardPath), decoder: jsonDecoder)
         }.first ?? .empty()
         imageCache.warmThumbnails(for: board.items)
+
+        Task { [weak self] in
+            self?.scanCurrentFolderForUpdates()
+        }
     }
 
     func newBoard() {
+        clearFolderScanState()
         board = .empty()
         saveCurrentBoard()
     }
@@ -66,8 +74,7 @@ final class BoardStore: ObservableObject {
             return
         }
 
-        if loaded.sourceKind == .folder,
-           let sourceFolderPath = loaded.sourceFolderPath {
+        if loaded.sourceKind == .folder, let sourceFolderPath = loaded.sourceFolderPath {
             let folderURL = URL(fileURLWithPath: sourceFolderPath, isDirectory: true)
             var isDirectory: ObjCBool = false
             guard FileManager.default.fileExists(atPath: folderURL.path, isDirectory: &isDirectory),
@@ -77,17 +84,16 @@ final class BoardStore: ObservableObject {
                 return
             }
 
-            importFolder(
+            activateBoard(loaded)
+            scanFolderForUpdates(
                 folderURL,
                 includeSubfolders: loaded.includeSubfolders,
-                restoring: loaded
+                boardID: loaded.id
             )
             return
         }
 
-        board = loaded
-        imageCache.warmThumbnails(for: loaded.items)
-        touchRecent(for: loaded)
+        activateBoard(loaded)
     }
 
     func clearRecents() {
@@ -101,16 +107,61 @@ final class BoardStore: ObservableObject {
     }
 
     func openFolder(_ folderURL: URL, includeSubfolders: Bool) {
-        importFolder(folderURL, includeSubfolders: includeSubfolders, restoring: nil)
+        let folderPath = folderURL.standardizedFileURL.path
+
+        if var savedBoard = savedFolderBoard(for: folderPath) {
+            let folderName = folderURL.lastPathComponent.isEmpty ? "Image Folder" : folderURL.lastPathComponent
+            let didChangeSettings = savedBoard.name != folderName
+                || savedBoard.includeSubfolders != includeSubfolders
+                || savedBoard.sourceFolderPath != folderPath
+
+            savedBoard.name = folderName
+            savedBoard.sourceKind = .folder
+            savedBoard.sourceFolderPath = folderPath
+            savedBoard.includeSubfolders = includeSubfolders
+            if didChangeSettings {
+                savedBoard.updatedAt = Date()
+            }
+
+            activateBoard(savedBoard, save: didChangeSettings)
+            scanFolderForUpdates(
+                folderURL,
+                includeSubfolders: includeSubfolders,
+                boardID: savedBoard.id
+            )
+            return
+        }
+
+        importNewFolder(folderURL, includeSubfolders: includeSubfolders)
     }
 
-    private func importFolder(
-        _ folderURL: URL,
-        includeSubfolders: Bool,
-        restoring savedBoard: BoardProject?
-    ) {
+    func scanCurrentFolderForUpdates() {
+        guard board.sourceKind == .folder, let folderPath = board.sourceFolderPath else {
+            clearFolderScanState()
+            return
+        }
+
+        let folderURL = URL(fileURLWithPath: folderPath, isDirectory: true)
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: folderURL.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            pendingFolderItems = []
+            return
+        }
+
+        scanFolderForUpdates(
+            folderURL,
+            includeSubfolders: board.includeSubfolders,
+            boardID: board.id
+        )
+    }
+
+    private func importNewFolder(_ folderURL: URL, includeSubfolders: Bool) {
         let importToken = UUID()
         folderImportToken = importToken
+        scannedFolderBoardID = nil
+        scannedFolderItemsByPath = [:]
+        pendingFolderItems = []
 
         let folderPath = folderURL.standardizedFileURL.path
         let folderName = folderURL.lastPathComponent.isEmpty ? "Image Folder" : folderURL.lastPathComponent
@@ -133,16 +184,19 @@ final class BoardStore: ObservableObject {
 
             guard folderImportToken == importToken else { return }
 
-            var next = savedBoard ?? .empty()
+            var next = BoardProject.empty()
             next.name = folderName
             next.sourceKind = .folder
             next.sourceFolderPath = folderPath
             next.includeSubfolders = includeSubfolders
+            next.knownFolderImagePaths = items.map(\.filePath).sorted()
             next.items = LayoutEngine.picasaLayout(items: items)
             next.layoutMode = .picasa
             next.updatedAt = Date()
 
             board = next
+            scannedFolderBoardID = next.id
+            scannedFolderItemsByPath = Dictionary(uniqueKeysWithValues: items.map { ($0.filePath, $0) })
             imageCache.warmThumbnails(for: next.items)
             saveCurrentBoard()
             DispatchQueue.main.async {
@@ -151,11 +205,144 @@ final class BoardStore: ObservableObject {
         }
     }
 
+    private func scanFolderForUpdates(
+        _ folderURL: URL,
+        includeSubfolders: Bool,
+        boardID: UUID
+    ) {
+        let importToken = UUID()
+        folderImportToken = importToken
+
+        Task {
+            let items: [BoardItem] = await Task.detached(priority: .utility) { () -> [BoardItem] in
+                let didAccess = folderURL.startAccessingSecurityScopedResource()
+                defer {
+                    if didAccess {
+                        folderURL.stopAccessingSecurityScopedResource()
+                    }
+                }
+
+                let imageURLs = ImageImporting.imageURLs(in: folderURL, includeSubfolders: includeSubfolders)
+                return imageURLs.compactMap { url -> BoardItem? in
+                    guard let metadata = ImageImporting.metadata(for: url) else { return nil }
+                    return BoardItem(fileURL: url, pixelWidth: metadata.pixelWidth, pixelHeight: metadata.pixelHeight)
+                }
+            }.value
+
+            guard folderImportToken == importToken, board.id == boardID else { return }
+
+            scannedFolderBoardID = boardID
+            scannedFolderItemsByPath = Dictionary(uniqueKeysWithValues: items.map { ($0.filePath, $0) })
+
+            if board.knownFolderImagePaths == nil {
+                var migratedBoard = board
+                migratedBoard.knownFolderImagePaths = board.items
+                    .filter(\.isImage)
+                    .map(\.filePath)
+                    .sorted()
+                board = migratedBoard
+                saveCurrentBoard()
+            }
+
+            refreshPendingFolderItems()
+        }
+    }
+
+    private func refreshPendingFolderItems() {
+        guard scannedFolderBoardID == board.id, board.sourceKind == .folder else {
+            pendingFolderItems = []
+            return
+        }
+
+        let existingPaths = Set(board.items.filter(\.isImage).map(\.filePath))
+        let knownPaths = Set(board.knownFolderImagePaths ?? Array(existingPaths))
+        let nextItems = scannedFolderItemsByPath.values
+            .filter { !existingPaths.contains($0.filePath) && !knownPaths.contains($0.filePath) }
+            .sorted { $0.filePath.localizedStandardCompare($1.filePath) == .orderedAscending }
+
+        guard nextItems.map(\.filePath) != pendingFolderItems.map(\.filePath) else { return }
+
+        pendingFolderItems = nextItems
+        imageCache.warmThumbnails(for: nextItems)
+    }
+
+    private func activateBoard(_ nextBoard: BoardProject, save: Bool = false) {
+        clearFolderScanState()
+        board = nextBoard
+        imageCache.warmThumbnails(for: nextBoard.items)
+
+        if save {
+            saveCurrentBoard()
+        } else {
+            touchRecent(for: nextBoard)
+        }
+    }
+
+    private func savedFolderBoard(for folderPath: String) -> BoardProject? {
+        let normalizedPath = normalizedFolderPath(folderPath)
+
+        if board.sourceKind == .folder,
+           let currentPath = board.sourceFolderPath,
+           normalizedFolderPath(currentPath) == normalizedPath {
+            return board
+        }
+
+        var candidatesByID: [UUID: BoardProject] = [:]
+
+        for recent in recents {
+            guard let candidate = Self.loadBoard(
+                from: URL(fileURLWithPath: recent.boardPath),
+                decoder: decoder
+            ) else { continue }
+            candidatesByID[candidate.id] = candidate
+        }
+
+        let boardFiles = (try? FileManager.default.contentsOfDirectory(
+            at: boardsURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )) ?? []
+
+        for boardFile in boardFiles where boardFile.pathExtension.lowercased() == "json" {
+            guard let candidate = Self.loadBoard(from: boardFile, decoder: decoder) else { continue }
+            candidatesByID[candidate.id] = candidate
+        }
+
+        return candidatesByID.values
+            .filter { candidate in
+                candidate.sourceKind == .folder
+                    && candidate.sourceFolderPath.map(normalizedFolderPath) == normalizedPath
+            }
+            .max { $0.updatedAt < $1.updatedAt }
+    }
+
+    private func normalizedFolderPath(_ path: String) -> String {
+        URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL.path
+    }
+
+    private func clearFolderScanState() {
+        folderImportToken = UUID()
+        scannedFolderBoardID = nil
+        scannedFolderItemsByPath = [:]
+        pendingFolderItems = []
+    }
+
     func replaceBoard(_ nextBoard: BoardProject) {
+        let didSwitchBoards = nextBoard.id != board.id
         var copy = nextBoard
         copy.updatedAt = Date()
+
+        if didSwitchBoards {
+            clearFolderScanState()
+        }
+
         board = copy
+        refreshPendingFolderItems()
         saveCurrentBoard()
+
+        if didSwitchBoards {
+            scanCurrentFolderForUpdates()
+        }
     }
 
     func saveCurrentBoard() {
@@ -178,16 +365,22 @@ final class BoardStore: ObservableObject {
         guard !newItems.isEmpty else { return }
 
         var next = board
-        if next.items.isEmpty {
+        if next.items.isEmpty && next.sourceKind != .folder {
             next.name = inferredLooseBoardName(from: urls)
             next.sourceKind = .looseFiles
             next.sourceFolderPath = nil
             next.includeSubfolders = false
+            next.knownFolderImagePaths = nil
         }
 
         next.items = LayoutEngine.appendedLayout(existingItems: next.items, newItems: newItems)
+        if next.sourceKind == .folder {
+            let knownPaths = Set(next.knownFolderImagePaths ?? Array(currentPaths))
+            next.knownFolderImagePaths = Array(knownPaths.union(newItems.map(\.filePath))).sorted()
+        }
         next.updatedAt = Date()
         board = next
+        refreshPendingFolderItems()
         imageCache.warmThumbnails(for: newItems)
         saveCurrentBoard()
     }

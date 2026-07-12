@@ -9,6 +9,7 @@ extension Notification.Name {
     static let imageCanvasDisableDrawingMode = Notification.Name("imageCanvasDisableDrawingMode")
     static let imageCanvasToggleTextMode = Notification.Name("imageCanvasToggleTextMode")
     static let imageCanvasClearDrawings = Notification.Name("imageCanvasClearDrawings")
+    static let imageCanvasApplyFolderUpdate = Notification.Name("imageCanvasApplyFolderUpdate")
 
     static let imageCanvasFitAll = Notification.Name("imageCanvasFitAll")
     static let imageCanvasZoomIn = Notification.Name("imageCanvasZoomIn")

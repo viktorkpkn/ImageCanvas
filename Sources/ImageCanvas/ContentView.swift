@@ -65,6 +65,9 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .imageCanvasToggleTextMode)) { _ in
             setTextMode(!isTextModeEnabled)
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            store.scanCurrentFolderForUpdates()
+        }
         .onChange(of: drawingColorPicker.hue) { _, _ in syncDrawingColor() }
         .onChange(of: drawingColorPicker.saturation) { _, _ in syncDrawingColor() }
         .onChange(of: drawingColorPicker.brightness) { _, _ in syncDrawingColor() }
@@ -80,6 +83,13 @@ struct ContentView: View {
             toolRail
                 .padding(.leading, 16)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+
+            if !store.pendingFolderItems.isEmpty {
+                updateCanvasButton
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 18)
+                    .zIndex(1)
+            }
 
             if isDrawingColorPickerPresented {
                 DrawingColorPickerView(model: drawingColorPicker)
@@ -102,6 +112,21 @@ struct ContentView: View {
         HStack(spacing: 10) {
             addImagesButton
             projectMenu
+        }
+    }
+
+    @ViewBuilder
+    private var updateCanvasButton: some View {
+        if #available(macOS 26.0, *) {
+            Button(action: applyFolderUpdate) {
+                glassChromeLabel(systemImage: "arrow.triangle.2.circlepath", title: "Update Canvas")
+            }
+            .buttonStyle(.plain)
+        } else {
+            Button(action: applyFolderUpdate) {
+                fallbackChromeLabel(systemImage: "arrow.triangle.2.circlepath", title: "Update Canvas")
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -410,6 +435,14 @@ struct ContentView: View {
 
     private func openFolder() {
         store.openFolderUsingPanel()
+    }
+
+    private func applyFolderUpdate() {
+        let items = store.pendingFolderItems
+        guard !items.isEmpty else { return }
+
+        setPointerMode()
+        NotificationCenter.default.post(name: .imageCanvasApplyFolderUpdate, object: items)
     }
 
     private func toggleChrome() {

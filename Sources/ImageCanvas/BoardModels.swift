@@ -163,6 +163,7 @@ struct BoardProject: Codable, Identifiable, Equatable {
     var sourceKind: BoardSourceKind
     var sourceFolderPath: String?
     var includeSubfolders: Bool
+    var knownFolderImagePaths: [String]?
     var layoutMode: LayoutMode
     var items: [BoardItem]
     var viewport: ViewportState
@@ -177,6 +178,7 @@ struct BoardProject: Codable, Identifiable, Equatable {
             sourceKind: .looseFiles,
             sourceFolderPath: nil,
             includeSubfolders: false,
+            knownFolderImagePaths: nil,
             layoutMode: .picasa,
             items: [],
             viewport: .initial,
