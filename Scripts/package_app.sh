@@ -3,14 +3,18 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CONFIGURATION="${1:-debug}"
-FINAL_APP_DIR="$ROOT_DIR/dist/ImageCanvas.app"
+VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$ROOT_DIR/Support/Info.plist")"
+BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$ROOT_DIR/Support/Info.plist")"
+ARCHIVE_NAME="ImageCanvas-${VERSION}-build${BUILD_NUMBER}.zip"
+FINAL_ARCHIVE="$ROOT_DIR/dist/$ARCHIVE_NAME"
 STAGING_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/imagecanvas-package.XXXXXX")"
 APP_DIR="$STAGING_ROOT/ImageCanvas.app"
+STAGING_ARCHIVE="$STAGING_ROOT/$ARCHIVE_NAME"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
-ICON_INFO_PLIST="$STAGING_ROOT/TestIcon-asset-info.plist"
-BACKUP_APP_DIR="$ROOT_DIR/.build/package/ImageCanvas.previous.app"
+ICON_INFO_PLIST="$STAGING_ROOT/ImageCanvas-asset-info.plist"
+BACKUP_ARCHIVE="$ROOT_DIR/.build/package/$ARCHIVE_NAME.previous"
 
 cleanup() {
   rm -rf "$STAGING_ROOT"
@@ -26,22 +30,10 @@ printf "APPL????" > "$CONTENTS_DIR/PkgInfo"
 cp "$ROOT_DIR/.build/$CONFIGURATION/ImageCanvas" "$MACOS_DIR/ImageCanvas"
 chmod +x "$MACOS_DIR/ImageCanvas"
 
-xcrun actool "$ROOT_DIR/TestIcon.icon" \
-  --compile "$RESOURCES_DIR" \
-  --output-format human-readable-text \
-  --notices \
-  --warnings \
-  --output-partial-info-plist "$ICON_INFO_PLIST" \
-  --app-icon TestIcon \
-  --enable-on-demand-resources NO \
-  --development-region en \
-  --target-device mac \
-  --minimum-deployment-target 14.0 \
-  --platform macosx \
-  --bundle-identifier local.imagecanvas.app
+xcrun actool "$ROOT_DIR/ImageCanvas.icon" --compile "$RESOURCES_DIR" --output-format human-readable-text --notices --warnings --output-partial-info-plist "$ICON_INFO_PLIST" --app-icon ImageCanvas --enable-on-demand-resources NO --development-region en --target-device mac --minimum-deployment-target 14.0 --platform macosx --bundle-identifier local.imagecanvas.app
 
-plutil -insert CFBundleIconFile -string TestIcon "$CONTENTS_DIR/Info.plist"
-plutil -insert CFBundleIconName -string TestIcon "$CONTENTS_DIR/Info.plist"
+plutil -insert CFBundleIconFile -string ImageCanvas "$CONTENTS_DIR/Info.plist"
+plutil -insert CFBundleIconName -string ImageCanvas "$CONTENTS_DIR/Info.plist"
 
 xattr -cr "$APP_DIR"
 while IFS= read -r bundled_path; do
@@ -51,20 +43,23 @@ while IFS= read -r bundled_path; do
 done < <(find "$APP_DIR" -print)
 codesign --force --sign - "$MACOS_DIR/ImageCanvas"
 codesign --force --deep --sign - "$APP_DIR"
+codesign --verify --deep --strict "$APP_DIR"
+
+ditto -c -k --norsrc --noextattr --keepParent "$APP_DIR" "$STAGING_ARCHIVE"
 
 mkdir -p "$ROOT_DIR/dist"
-mkdir -p "$(dirname "$BACKUP_APP_DIR")"
-rm -rf "$BACKUP_APP_DIR"
-if [ -d "$FINAL_APP_DIR" ]; then
-  mv "$FINAL_APP_DIR" "$BACKUP_APP_DIR"
+mkdir -p "$(dirname "$BACKUP_ARCHIVE")"
+rm -f "$BACKUP_ARCHIVE"
+if [ -f "$FINAL_ARCHIVE" ]; then
+  mv "$FINAL_ARCHIVE" "$BACKUP_ARCHIVE"
 fi
 
-if ! mv "$APP_DIR" "$FINAL_APP_DIR"; then
-  if [ -d "$BACKUP_APP_DIR" ]; then
-    mv "$BACKUP_APP_DIR" "$FINAL_APP_DIR"
+if ! mv "$STAGING_ARCHIVE" "$FINAL_ARCHIVE"; then
+  if [ -f "$BACKUP_ARCHIVE" ]; then
+    mv "$BACKUP_ARCHIVE" "$FINAL_ARCHIVE"
   fi
   exit 1
 fi
 
-rm -rf "$BACKUP_APP_DIR"
-echo "$FINAL_APP_DIR"
+rm -f "$BACKUP_ARCHIVE"
+echo "$FINAL_ARCHIVE"

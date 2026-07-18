@@ -59,7 +59,15 @@ enum ImageImporting {
             return nil
         }
 
-        return ImageMetadata(pixelWidth: max(width, 1), pixelHeight: max(height, 1))
+        let orientation = properties[kCGImagePropertyOrientation] as? UInt32
+            ?? (properties[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value
+            ?? 1
+        let swapsAxes = [5, 6, 7, 8].contains(orientation)
+
+        return ImageMetadata(
+            pixelWidth: max(swapsAxes ? height : width, 1),
+            pixelHeight: max(swapsAxes ? width : height, 1)
+        )
     }
 
     private static func isSupportedImageURL(_ url: URL) -> Bool {

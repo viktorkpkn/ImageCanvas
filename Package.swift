@@ -11,6 +11,7 @@ let package = Package(
         .executable(name: "ImageCanvas", targets: ["ImageCanvas"])
     ],
     targets: [
-        .executableTarget(name: "ImageCanvas")
+        .executableTarget(name: "ImageCanvas"),
+        .testTarget(name: "ImageCanvasTests", dependencies: ["ImageCanvas"])
     ]
 )

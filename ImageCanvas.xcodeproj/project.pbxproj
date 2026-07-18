@@ -17,7 +17,9 @@
 		1A0000010000000000000008 /* LayoutEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000020000000000000008 /* LayoutEngine.swift */; };
 		1A0000010000000000000009 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000020000000000000009 /* Notifications.swift */; };
 		1A000001000000000000000A /* WindowChromeConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000002000000000000000A /* WindowChromeConfigurator.swift */; };
-		EB2637332FFEEA4E0054B046 /* TestIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = EB2637322FFEEA4E0054B046 /* TestIcon.icon */; };
+		1A000001000000000000000B /* AppPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000002000000000000000F /* AppPreferences.swift */; };
+		1A000001000000000000000C /* SnapshotExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000020000000000000010 /* SnapshotExport.swift */; };
+		EB2637332FFEEA4E0054B046 /* ImageCanvas.icon in Resources */ = {isa = PBXBuildFile; fileRef = EB2637322FFEEA4E0054B046 /* ImageCanvas.icon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,7 +37,9 @@
 		1A000002000000000000000C /* Package.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Package.swift; sourceTree = "<group>"; };
 		1A000002000000000000000D /* package_app.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = package_app.sh; sourceTree = "<group>"; };
 		1A000002000000000000000E /* ImageCanvas.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ImageCanvas.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		EB2637322FFEEA4E0054B046 /* TestIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = TestIcon.icon; sourceTree = "<group>"; };
+		1A000002000000000000000F /* AppPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPreferences.swift; sourceTree = "<group>"; };
+		1A0000020000000000000010 /* SnapshotExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotExport.swift; sourceTree = "<group>"; };
+		EB2637322FFEEA4E0054B046 /* ImageCanvas.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = ImageCanvas.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -58,7 +62,7 @@
 				1A0000040000000000000005 /* Support */,
 				1A0000040000000000000006 /* Scripts */,
 				1A0000040000000000000007 /* Products */,
-				EB2637322FFEEA4E0054B046 /* TestIcon.icon */,
+				EB2637322FFEEA4E0054B046 /* ImageCanvas.icon */,
 			);
 			sourceTree = "<group>";
 		};
@@ -83,6 +87,8 @@
 				1A0000020000000000000008 /* LayoutEngine.swift */,
 				1A0000020000000000000009 /* Notifications.swift */,
 				1A000002000000000000000A /* WindowChromeConfigurator.swift */,
+				1A000002000000000000000F /* AppPreferences.swift */,
+				1A0000020000000000000010 /* SnapshotExport.swift */,
 			);
 			path = ImageCanvas;
 			sourceTree = "<group>";
@@ -145,11 +151,11 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2650;
-				LastUpgradeCheck = 2650;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					1A0000050000000000000001 = {
-						CreatedOnToolsVersion = 26.5;
+						CreatedOnToolsVersion = 27.0;
 					};
 				};
 			};
@@ -176,7 +182,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				EB2637332FFEEA4E0054B046 /* TestIcon.icon in Resources */,
+				EB2637332FFEEA4E0054B046 /* ImageCanvas.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -197,6 +203,8 @@
 				1A0000010000000000000008 /* LayoutEngine.swift in Sources */,
 				1A0000010000000000000009 /* Notifications.swift in Sources */,
 				1A000001000000000000000A /* WindowChromeConfigurator.swift in Sources */,
+				1A000001000000000000000B /* AppPreferences.swift in Sources */,
+				1A000001000000000000000C /* SnapshotExport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -320,11 +328,11 @@
 		1A00000A0000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = TestIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = ImageCanvas;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -334,7 +342,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.3.6;
+				MARKETING_VERSION = 0.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = local.imagecanvas.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -345,11 +353,11 @@
 		1A00000A0000000000000004 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = TestIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = ImageCanvas;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -359,7 +367,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.3.6;
+				MARKETING_VERSION = 0.4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = local.imagecanvas.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

@@ -9,6 +9,8 @@ struct ImageCanvasApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
+            ImageCanvasArrangementCommands()
+
             CommandGroup(replacing: .newItem) {
                 Button("New Board") {
                     post(.imageCanvasNewBoard)
@@ -24,6 +26,32 @@ struct ImageCanvasApp: App {
                     post(.imageCanvasOpenFolder)
                 }
                 .keyboardShortcut("o", modifiers: .command)
+            }
+
+            CommandGroup(after: .saveItem) {
+                Menu {
+                    Button("Take Snapshot") {
+                        NotificationCenter.default.post(
+                            name: .imageCanvasTakeSnapshot,
+                            object: SnapshotRequest.current(destination: .automaticPictures)
+                        )
+                    }
+
+                    Button("Settings...") {
+                        post(.imageCanvasShowSnapshotSettings)
+                    }
+
+                    Divider()
+
+                    Button("Export Snapshot...") {
+                        NotificationCenter.default.post(
+                            name: .imageCanvasTakeSnapshot,
+                            object: SnapshotRequest.current(destination: .savePanel)
+                        )
+                    }
+                } label: {
+                    TrailingGearCommandLabel(title: "Snapshot")
+                }
             }
 
             CommandMenu("Canvas") {
@@ -76,16 +104,6 @@ struct ImageCanvasApp: App {
                 }
             }
 
-            CommandMenu("Arrange") {
-                Button("Tiled grid") {
-                    post(.imageCanvasArrangePicasa)
-                }
-
-                Button("Cascading grid") {
-                    post(.imageCanvasArrangePinterest)
-                }
-            }
-
             CommandMenu("Selection") {
                 Button("Select All") {
                     post(.imageCanvasSelectAll)
@@ -127,7 +145,47 @@ struct ImageCanvasApp: App {
         }
     }
 
-    private func post(_ name: Notification.Name) {
-        NotificationCenter.default.post(name: name, object: nil)
+    private func post(_ name: Notification.Name, object: Any? = nil) {
+        NotificationCenter.default.post(name: name, object: object)
+    }
+}
+
+private struct ImageCanvasArrangementCommands: Commands {
+    var body: some Commands {
+        CommandMenu("Arrange") {
+            Button("Equalized Tiled Grid") {
+                NotificationCenter.default.post(
+                    name: .imageCanvasArrangePicasa,
+                    object: nil
+                )
+            }
+
+            Button("Native Tiled Grid") {
+                NotificationCenter.default.post(
+                    name: .imageCanvasArrangeNativeTiled,
+                    object: nil
+                )
+            }
+
+            Button("Cascading Grid") {
+                NotificationCenter.default.post(
+                    name: .imageCanvasArrangePinterest,
+                    object: nil
+                )
+            }
+        }
+    }
+}
+
+private struct TrailingGearCommandLabel: View {
+    let title: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+            Spacer(minLength: 24)
+            Image(systemName: "gearshape")
+                .imageScale(.small)
+        }
     }
 }

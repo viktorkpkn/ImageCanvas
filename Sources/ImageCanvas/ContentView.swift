@@ -9,7 +9,12 @@ struct ContentView: View {
     @State private var isTextModeEnabled = false
     @State private var drawingColor = Color.yellow
     @State private var isDrawingColorPickerPresented = false
+    @State private var isSnapshotSettingsPresented = false
+    @State private var isLargeSnapshotExporting = false
+    @State private var canvasNotice: CanvasNotice?
     @StateObject private var drawingColorPicker = DrawingColorPickerModel(color: .yellow)
+    @AppStorage(SnapshotPreferences.scaleKey) private var snapshotScale = Double(SnapshotPreferences.defaultScale)
+    @AppStorage(SnapshotPreferences.captureCurrentViewKey) private var capturesCurrentView = false
 
     var body: some View {
         ZStack {
@@ -28,6 +33,7 @@ struct ContentView: View {
                 onCanvasInteraction: {
                     isDrawingColorPickerPresented = false
                     isProjectMenuPresented = false
+                    isSnapshotSettingsPresented = false
                 }
             )
             .ignoresSafeArea()
@@ -37,12 +43,21 @@ struct ContentView: View {
                     .transition(.opacity)
             }
 
+            if isLargeSnapshotExporting || canvasNotice != nil {
+                snapshotStatusOverlay
+                    .transition(.opacity)
+                    .zIndex(4)
+            }
+
             WindowChromeConfigurator()
                 .frame(width: 0, height: 0)
         }
         .background(Color.black)
         .ignoresSafeArea(.container, edges: .all)
         .frame(minWidth: 900, minHeight: 620)
+        .sheet(isPresented: $isSnapshotSettingsPresented) {
+            snapshotSettingsSheet
+        }
         .onReceive(NotificationCenter.default.publisher(for: .imageCanvasAddImages)) { _ in
             addImages()
         }
@@ -65,6 +80,19 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .imageCanvasToggleTextMode)) { _ in
             setTextMode(!isTextModeEnabled)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .imageCanvasShowSnapshotSettings)) { _ in
+            isSnapshotSettingsPresented = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .imageCanvasSnapshotProgress)) { notification in
+            guard let isExporting = notification.object as? Bool else { return }
+            withAnimation(.easeOut(duration: 0.16)) {
+                isLargeSnapshotExporting = isExporting
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .imageCanvasNotice)) { notification in
+            guard let notice = notification.object as? CanvasNotice else { return }
+            showNotice(notice)
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             store.scanCurrentFolderForUpdates()
         }
@@ -84,7 +112,7 @@ struct ContentView: View {
                 .padding(.leading, 16)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
 
-            if !store.pendingFolderItems.isEmpty {
+            if !store.pendingFolderItems.isEmpty, !isLargeSnapshotExporting, canvasNotice == nil {
                 updateCanvasButton
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .padding(.bottom, 18)
@@ -105,6 +133,7 @@ struct ContentView: View {
                     .padding(.trailing, 16)
                     .zIndex(2)
             }
+
         }
     }
 
@@ -112,6 +141,109 @@ struct ContentView: View {
         HStack(spacing: 10) {
             addImagesButton
             projectMenu
+        }
+    }
+
+    private var snapshotSettingsSheet: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Snapshot")
+                .font(.headline)
+
+            HStack {
+                Text("Resolution")
+                Spacer()
+                TextField("Scale", value: snapshotScaleBinding, format: .number.precision(.fractionLength(0...2)))
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 72)
+                Text("×")
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("Enter a factor from 0.25× to 8×. Default is 2×.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Toggle("Capture Current View", isOn: $capturesCurrentView)
+
+            Text(capturesCurrentView
+                ? "Uses the current pan and zoom."
+                : "Fits the whole board with padding and centers it in the frame.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Divider()
+
+            HStack {
+                Spacer()
+                Button("Done") {
+                    isSnapshotSettingsPresented = false
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(18)
+        .frame(width: 320)
+        .onDisappear {
+            snapshotScale = Double(SnapshotPreferences.validatedScale(CGFloat(snapshotScale)))
+        }
+    }
+
+    @ViewBuilder
+    private var snapshotStatusOverlay: some View {
+        Group {
+            if isLargeSnapshotExporting {
+                snapshotProgressView
+            } else if let canvasNotice {
+                noticeView(canvasNotice)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .padding(.horizontal, 18)
+        .padding(.bottom, 18)
+    }
+
+    private var snapshotProgressView: some View {
+        statusGlassSurface {
+            ProgressView()
+                .progressViewStyle(.linear)
+                .tint(.accentColor)
+                .frame(width: 250)
+                .accessibilityLabel("Exporting snapshot")
+                .padding(.horizontal, 14)
+                .padding(.vertical, 15)
+        }
+    }
+
+    private func noticeView(_ notice: CanvasNotice) -> some View {
+        statusGlassSurface {
+            HStack(spacing: 9) {
+                Image(systemName: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                    .foregroundStyle(notice.isError ? Color.orange : Color.green)
+                Text(notice.message)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(3)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .frame(maxWidth: 440)
+        }
+    }
+
+    @ViewBuilder
+    private func statusGlassSurface<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        if #available(macOS 26.0, *) {
+            content()
+                .glassEffect(.regular, in: Capsule())
+                .overlay { Capsule().stroke(.white.opacity(0.18), lineWidth: 1) }
+                .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
+        } else {
+            content()
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay { Capsule().stroke(.white.opacity(0.18), lineWidth: 1) }
+                .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
         }
     }
 
@@ -208,7 +340,7 @@ struct ContentView: View {
                 isDrawingColorPickerPresented = false
                 isProjectMenuPresented.toggle()
             } label: {
-                glassIconChromeLabel(systemImage: "folder")
+                glassIconChromeLabel(systemImage: "folder", accessibilityLabel: "Project")
             }
             .buttonStyle(.plain)
         } else {
@@ -216,7 +348,7 @@ struct ContentView: View {
                 isDrawingColorPickerPresented = false
                 isProjectMenuPresented.toggle()
             } label: {
-                fallbackIconChromeLabel(systemImage: "folder")
+                fallbackIconChromeLabel(systemImage: "folder", accessibilityLabel: "Project")
             }
             .buttonStyle(.plain)
         }
@@ -393,7 +525,7 @@ struct ContentView: View {
     }
 
     @available(macOS 26.0, *)
-    private func glassIconChromeLabel(systemImage: String) -> some View {
+    private func glassIconChromeLabel(systemImage: String, accessibilityLabel: String) -> some View {
         iconChromeLabel(systemImage: systemImage)
             .glassEffect(.regular.interactive(), in: Circle())
             .overlay {
@@ -402,7 +534,7 @@ struct ContentView: View {
             }
             .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
             .contentShape(Circle())
-            .accessibilityLabel("Project")
+            .accessibilityLabel(accessibilityLabel)
     }
 
     private func fallbackChromeLabel(systemImage: String, title: String) -> some View {
@@ -417,7 +549,7 @@ struct ContentView: View {
         .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
     }
 
-    private func fallbackIconChromeLabel(systemImage: String) -> some View {
+    private func fallbackIconChromeLabel(systemImage: String, accessibilityLabel: String) -> some View {
         iconChromeLabel(systemImage: systemImage)
             .background(.ultraThinMaterial, in: Circle())
             .overlay {
@@ -425,7 +557,7 @@ struct ContentView: View {
                     .stroke(.white.opacity(0.18), lineWidth: 1)
             }
             .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
-            .accessibilityLabel("Project")
+            .accessibilityLabel(accessibilityLabel)
     }
 
     private func addImages() {
@@ -453,6 +585,7 @@ struct ContentView: View {
         if !nextVisibility {
             isDrawingColorPickerPresented = false
             isProjectMenuPresented = false
+            isSnapshotSettingsPresented = false
         }
     }
 
@@ -501,8 +634,29 @@ struct ContentView: View {
         drawingColor = Color(nsColor: drawingColorPicker.color)
     }
 
-    private func post(_ name: Notification.Name) {
-        NotificationCenter.default.post(name: name, object: nil)
+    private var snapshotScaleBinding: Binding<Double> {
+        Binding(
+            get: { snapshotScale },
+            set: { snapshotScale = Double(SnapshotPreferences.validatedScale(CGFloat($0))) }
+        )
+    }
+
+    private func showNotice(_ notice: CanvasNotice) {
+        withAnimation(.easeOut(duration: 0.16)) {
+            isLargeSnapshotExporting = false
+            canvasNotice = notice
+        }
+        let message = notice.message
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+            guard canvasNotice?.message == message else { return }
+            withAnimation(.easeOut(duration: 0.16)) {
+                canvasNotice = nil
+            }
+        }
+    }
+
+    private func post(_ name: Notification.Name, object: Any? = nil) {
+        NotificationCenter.default.post(name: name, object: object)
     }
 }
 

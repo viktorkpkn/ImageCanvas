@@ -3,36 +3,20 @@ import Foundation
 import ImageIO
 
 final class ImageCache {
-    private let fullImageCache = NSCache<NSString, NSImage>()
     private let thumbnailCache = NSCache<NSString, NSImage>()
     private let thumbnailQueue = DispatchQueue(label: "local.imagecanvas.thumbnail-cache", qos: .userInitiated)
+    private let requestLock = NSLock()
+    private var pendingThumbnailKeys: Set<String> = []
+    private var failedThumbnailKeys: Set<String> = []
+
+    var onThumbnailReady: (() -> Void)?
 
     init() {
-        fullImageCache.countLimit = 80
         thumbnailCache.countLimit = 600
-    }
-
-    func image(for item: BoardItem) -> NSImage? {
-        guard item.isImage else { return nil }
-        let key = item.filePath as NSString
-        if let cached = fullImageCache.object(forKey: key) {
-            return cached
-        }
-
-        guard let image = NSImage(contentsOfFile: item.filePath) else {
-            return nil
-        }
-
-        fullImageCache.setObject(image, forKey: key)
-        return image
     }
 
     func displayImage(for item: BoardItem, targetPixelSize: CGFloat, isZooming: Bool) -> NSImage? {
         guard item.isImage else { return nil }
-        if targetPixelSize > 2200 {
-            return image(for: item)
-        }
-
         let bucket = thumbnailBucket(for: targetPixelSize)
         let key = "\(item.filePath)#\(bucket)" as NSString
 
@@ -40,43 +24,21 @@ final class ImageCache {
             return cached
         }
 
-        if isZooming {
-            return cachedThumbnail(for: item)
+        if !isZooming {
+            requestThumbnail(for: item, maxPixelSize: bucket)
         }
 
-        guard let image = makeThumbnail(for: item, maxPixelSize: bucket) ?? image(for: item) else {
-            return nil
-        }
-
-        thumbnailCache.setObject(image, forKey: key)
-        return image
+        return cachedThumbnail(for: item)
     }
 
-    func warmThumbnails(for items: [BoardItem]) {
-        let items = items
-        thumbnailQueue.async { [weak self] in
-            guard let self else { return }
-
-            for item in items where item.isImage {
-                for bucket in [256, 512, 1024] {
-                    let key = "\(item.filePath)#\(bucket)" as NSString
-                    if self.thumbnailCache.object(forKey: key) != nil {
-                        continue
-                    }
-
-                    guard let image = self.makeThumbnail(for: item, maxPixelSize: bucket) else {
-                        continue
-                    }
-
-                    self.thumbnailCache.setObject(image, forKey: key)
-                }
-            }
-        }
-    }
+    func warmThumbnails(for _: [BoardItem]) {}
 
     func clear() {
-        fullImageCache.removeAllObjects()
         thumbnailCache.removeAllObjects()
+        requestLock.withLock {
+            pendingThumbnailKeys.removeAll()
+            failedThumbnailKeys.removeAll()
+        }
     }
 
     private func thumbnailBucket(for targetPixelSize: CGFloat) -> Int {
@@ -87,13 +49,17 @@ final class ImageCache {
             return 512
         case ..<1100:
             return 1024
-        default:
+        case ..<2200:
             return 2048
+        case ..<4400:
+            return 4096
+        default:
+            return 8192
         }
     }
 
     private func cachedThumbnail(for item: BoardItem) -> NSImage? {
-        for bucket in [1024, 512, 256, 2048] {
+        for bucket in [2048, 1024, 512, 256, 4096, 8192] {
             let key = "\(item.filePath)#\(bucket)" as NSString
             if let cached = thumbnailCache.object(forKey: key) {
                 return cached
@@ -101,6 +67,39 @@ final class ImageCache {
         }
 
         return nil
+    }
+
+    private func requestThumbnail(for item: BoardItem, maxPixelSize: Int) {
+        let key = "\(item.filePath)#\(maxPixelSize)"
+        let shouldStart = requestLock.withLock {
+            guard !pendingThumbnailKeys.contains(key), !failedThumbnailKeys.contains(key) else {
+                return false
+            }
+            pendingThumbnailKeys.insert(key)
+            return true
+        }
+        guard shouldStart else { return }
+
+        thumbnailQueue.async { [weak self] in
+            guard let self else { return }
+
+            let image = self.makeThumbnail(for: item, maxPixelSize: maxPixelSize)
+            if let image {
+                self.thumbnailCache.setObject(image, forKey: key as NSString)
+            }
+
+            self.requestLock.withLock {
+                self.pendingThumbnailKeys.remove(key)
+                if image == nil {
+                    self.failedThumbnailKeys.insert(key)
+                }
+            }
+
+            guard image != nil else { return }
+            DispatchQueue.main.async { [weak self] in
+                self?.onThumbnailReady?()
+            }
+        }
     }
 
     private func makeThumbnail(for item: BoardItem, maxPixelSize: Int) -> NSImage? {
@@ -122,5 +121,13 @@ final class ImageCache {
         }
 
         return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+    }
+}
+
+private extension NSLock {
+    func withLock<T>(_ body: () -> T) -> T {
+        lock()
+        defer { unlock() }
+        return body()
     }
 }

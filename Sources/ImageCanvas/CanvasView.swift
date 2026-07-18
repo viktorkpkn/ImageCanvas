@@ -1,5 +1,12 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
+
+private enum ArrangementKind {
+    case equalizedTiled
+    case nativeTiled
+    case cascading
+}
 
 private struct TextFormattingControlState: Equatable {
     var itemID: UUID
@@ -200,6 +207,7 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
     private var isDrawingModeEnabled = false
     private var isTextModeEnabled = false
     private var areControlsVisible = true
+    private var isSnapshotExportInProgress = false
     private var drawingColor = NSColor.systemYellow
     private var drawingStrokes: [DrawingStroke] = []
     private var drawingRedoStack: [DrawingStroke] = []
@@ -241,6 +249,9 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
         onCanvasInteraction: @escaping () -> Void
     ) {
         self.imageCache = imageCache
+        imageCache.onThumbnailReady = { [weak self] in
+            self?.needsDisplay = true
+        }
         let didChangeControlVisibility = self.areControlsVisible != areControlsVisible
         self.areControlsVisible = areControlsVisible
         applyDrawingMode(isDrawingModeEnabled, notify: false)
@@ -305,8 +316,20 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
         observers.append(center.addObserver(forName: .imageCanvasRotateSelected, object: nil, queue: .main) { [weak self] _ in self?.rotateSelected() })
         observers.append(center.addObserver(forName: .imageCanvasFlipHorizontal, object: nil, queue: .main) { [weak self] _ in self?.flipSelected(horizontal: true) })
         observers.append(center.addObserver(forName: .imageCanvasFlipVertical, object: nil, queue: .main) { [weak self] _ in self?.flipSelected(horizontal: false) })
-        observers.append(center.addObserver(forName: .imageCanvasArrangePicasa, object: nil, queue: .main) { [weak self] _ in self?.arrange(.picasa) })
-        observers.append(center.addObserver(forName: .imageCanvasArrangePinterest, object: nil, queue: .main) { [weak self] _ in self?.arrange(.pinterest) })
+        observers.append(center.addObserver(forName: .imageCanvasArrangePicasa, object: nil, queue: .main) { [weak self] _ in
+            self?.arrange(.equalizedTiled)
+        })
+        observers.append(center.addObserver(forName: .imageCanvasArrangeNativeTiled, object: nil, queue: .main) { [weak self] _ in
+            self?.arrange(.nativeTiled)
+        })
+        observers.append(center.addObserver(forName: .imageCanvasArrangePinterest, object: nil, queue: .main) { [weak self] _ in
+            self?.arrange(.cascading)
+        })
+        observers.append(center.addObserver(forName: .imageCanvasTakeSnapshot, object: nil, queue: .main) { [weak self] notification in
+            let request = notification.object as? SnapshotRequest
+                ?? SnapshotRequest.current(destination: .automaticPictures)
+            self?.takeSnapshot(request)
+        })
         observers.append(center.addObserver(forName: .imageCanvasUndo, object: nil, queue: .main) { [weak self] _ in self?.performUndo() })
         observers.append(center.addObserver(forName: .imageCanvasRedo, object: nil, queue: .main) { [weak self] _ in self?.performRedo() })
         observers.append(center.addObserver(forName: .imageCanvasRedoDrawing, object: nil, queue: .main) { [weak self] _ in self?.performDrawingRedoShortcut() })
@@ -331,28 +354,58 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
         NSColor.black.setFill()
         dirtyRect.fill()
 
+        let liveTransform = CanvasRenderTransform(scale: scale, offset: offset)
+
         for item in board.items {
-            draw(item)
+            draw(
+                item,
+                transform: liveTransform,
+                cullingBounds: bounds.insetBy(dx: -200, dy: -200),
+                usesFullResolutionImage: false,
+                includesEditingText: false
+            )
         }
 
-        drawDrawingStrokes()
+        drawDrawingStrokes(transform: liveTransform)
         drawSnapGuides()
         drawSelectionOutlines()
         drawMarquee()
         updateTextFormattingControl()
     }
 
-    private func draw(_ item: BoardItem) {
+    private func draw(
+        _ item: BoardItem,
+        transform canvasTransform: CanvasRenderTransform,
+        cullingBounds: CGRect?,
+        usesFullResolutionImage: Bool,
+        includesEditingText: Bool
+    ) {
         if item.isText {
-            drawText(item)
+            drawText(
+                item,
+                transform: canvasTransform,
+                cullingBounds: cullingBounds,
+                includesEditingText: includesEditingText
+            )
             return
         }
 
-        let rect = screenRect(for: item.frame.cgRect).integral
-        guard rect.intersects(bounds.insetBy(dx: -200, dy: -200)) else { return }
+        let rect = canvasTransform.rect(item.frame.cgRect).integral
+        if let cullingBounds, !rect.intersects(cullingBounds) { return }
 
-        let targetPixelSize = max(rect.width, rect.height) * max(window?.backingScaleFactor ?? 2, 1)
-        guard let image = imageCache?.displayImage(for: item, targetPixelSize: targetPixelSize, isZooming: isZooming) else {
+        let image: NSImage?
+        if usesFullResolutionImage {
+            image = NSImage(contentsOfFile: item.filePath)
+        } else {
+            let targetPixelSize = max(rect.width, rect.height) * max(window?.backingScaleFactor ?? 2, 1)
+            image = imageCache?.displayImage(
+                for: item,
+                targetPixelSize: targetPixelSize,
+                isZooming: isZooming
+            )
+        }
+
+        guard let image else {
             drawMissingImage(item, in: rect)
             return
         }
@@ -382,14 +435,24 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
         NSGraphicsContext.restoreGraphicsState()
     }
 
-    private func drawText(_ item: BoardItem) {
-        guard item.id != editingTextID else { return }
+    private func drawText(
+        _ item: BoardItem,
+        transform canvasTransform: CanvasRenderTransform,
+        cullingBounds: CGRect?,
+        includesEditingText: Bool
+    ) {
+        guard includesEditingText || item.id != editingTextID else { return }
 
-        let rect = screenRect(for: item.frame.cgRect).integral
-        guard rect.intersects(bounds.insetBy(dx: -200, dy: -200)) else { return }
+        var renderedItem = item
+        if includesEditingText, item.id == editingTextID, let textEditor {
+            renderedItem.text = textEditor.stringValue
+        }
 
-        let font = textFont(for: item, in: rect)
-        let text = item.displayedText
+        let rect = canvasTransform.rect(renderedItem.frame.cgRect).integral
+        if let cullingBounds, !rect.intersects(cullingBounds) { return }
+
+        let font = textFont(for: renderedItem, in: rect)
+        let text = renderedItem.displayedText
         let textSize = (text as NSString).size(withAttributes: [.font: font])
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byClipping
@@ -404,10 +467,10 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
 
         let transform = NSAffineTransform()
         transform.translateX(by: rect.midX, yBy: rect.midY)
-        transform.rotate(byDegrees: CGFloat(item.rotationDegrees))
+        transform.rotate(byDegrees: CGFloat(renderedItem.rotationDegrees))
         transform.scaleX(
-            by: item.isFlippedHorizontally ? -1 : 1,
-            yBy: item.isFlippedVertically ? -1 : 1
+            by: renderedItem.isFlippedHorizontally ? -1 : 1,
+            yBy: renderedItem.isFlippedVertically ? -1 : 1
         )
         transform.translateX(by: -rect.midX, yBy: -rect.midY)
         transform.concat()
@@ -485,24 +548,24 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
         NSString(string: item.fileName).draw(in: rect.insetBy(dx: 10, dy: 10), withAttributes: attributes)
     }
 
-    private func drawDrawingStrokes() {
+    private func drawDrawingStrokes(transform: CanvasRenderTransform) {
         for stroke in drawingStrokes {
-            draw(stroke)
+            draw(stroke, transform: transform)
         }
 
         if let activeDrawingStroke {
-            draw(activeDrawingStroke)
+            draw(activeDrawingStroke, transform: transform)
         }
     }
 
-    private func draw(_ stroke: DrawingStroke) {
+    private func draw(_ stroke: DrawingStroke, transform: CanvasRenderTransform) {
         guard let firstCanvasPoint = stroke.points.first else { return }
 
         stroke.color.setStroke()
         stroke.color.setFill()
 
-        let strokeWidth = max(stroke.lineWidth * scale, 1.5)
-        let firstScreenPoint = screenPoint(from: firstCanvasPoint)
+        let strokeWidth = max(stroke.lineWidth * transform.scale, 1.5)
+        let firstScreenPoint = transform.point(firstCanvasPoint)
 
         guard stroke.points.count > 1 else {
             let dotRect = CGRect(
@@ -520,7 +583,7 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
         path.move(to: firstScreenPoint)
 
         for canvasPoint in stroke.points.dropFirst() {
-            path.line(to: screenPoint(from: canvasPoint))
+            path.line(to: transform.point(canvasPoint))
         }
 
         path.stroke()
@@ -1345,7 +1408,7 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
         }
     }
 
-    private func arrange(_ mode: LayoutMode) {
+    private func arrange(_ kind: ArrangementKind) {
         let arrangingSelection = !selectedIDs.isEmpty
         let images = board.items.filter { item in
             item.isImage && (!arrangingSelection || selectedIDs.contains(item.id))
@@ -1353,21 +1416,43 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
         guard !images.isEmpty else { return }
 
         let originalBounds = LayoutEngine.boundingRect(for: images.map(\.frame.cgRect))
+        var nativePixelSizes: [UUID: CGSize] = [:]
+        var missingResolutionCount = 0
+
+        if kind == .nativeTiled {
+            for item in images {
+                guard let metadata = ImageImporting.metadata(for: URL(fileURLWithPath: item.filePath)) else {
+                    missingResolutionCount += 1
+                    continue
+                }
+
+                var size = CGSize(width: metadata.pixelWidth, height: metadata.pixelHeight)
+                let rotation = ((item.rotationDegrees % 360) + 360) % 360
+                if rotation == 90 || rotation == 270 {
+                    swap(&size.width, &size.height)
+                }
+                nativePixelSizes[item.id] = size
+            }
+        }
+
         let arranged: [BoardItem]
-        switch mode {
-        case .picasa:
+        switch kind {
+        case .equalizedTiled:
             arranged = LayoutEngine.picasaLayout(items: images)
-        case .pinterest:
-            arranged = LayoutEngine.pinterestLayout(
-                items: images,
-                availableWidth: max(bounds.width / max(scale, 0.02), 900)
+        case .nativeTiled:
+            let sized = LayoutEngine.nativeSizedItems(
+                images,
+                nativePixelSizes: nativePixelSizes
             )
+            arranged = LayoutEngine.nativeTiledLayout(items: sized)
+        case .cascading:
+            arranged = LayoutEngine.cascadingLayout(items: images)
         }
 
         let arrangedBounds = LayoutEngine.boundingRect(for: arranged.map(\.frame.cgRect))
         let translation = CGPoint(
-            x: arrangingSelection ? originalBounds.midX - arrangedBounds.midX : 0,
-            y: arrangingSelection ? originalBounds.midY - arrangedBounds.midY : 0
+            x: originalBounds.midX - arrangedBounds.midX,
+            y: originalBounds.midY - arrangedBounds.midY
         )
         let arrangedFrames = Dictionary(uniqueKeysWithValues: arranged.map { item in
             let frame = item.frame.cgRect.offsetBy(dx: translation.x, dy: translation.y)
@@ -1379,12 +1464,228 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
                 guard let frame = arrangedFrames[board.items[index].id] else { continue }
                 board.items[index].frame = frame
             }
-            board.layoutMode = mode
+            board.layoutMode = kind == .cascading ? .pinterest : .picasa
         }
 
-        if !arrangingSelection {
-            fitAll()
+        if missingResolutionCount > 0 {
+            postNotice(
+                "Kept the current size for \(missingResolutionCount) image\(missingResolutionCount == 1 ? "" : "s") whose native resolution could not be read.",
+                isError: false
+            )
         }
+    }
+
+    private func takeSnapshot(_ request: SnapshotRequest) {
+        do {
+            guard !isSnapshotExportInProgress else {
+                postNotice("A snapshot export is already in progress.", isError: false)
+                return
+            }
+
+            let plan = try SnapshotGeometry.makePlan(
+                logicalSize: bounds.size,
+                liveScale: scale,
+                liveOffset: offset,
+                contentBounds: snapshotContentBounds(),
+                capturesCurrentView: request.capturesCurrentView,
+                resolutionScale: request.resolutionScale
+            )
+
+            if plan.requiresLargeExportConfirmation {
+                guard confirmLargeSnapshot(plan) else {
+                    postNotice("Snapshot canceled.", isError: false)
+                    return
+                }
+
+                isSnapshotExportInProgress = true
+                postSnapshotProgress(isVisible: true)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+                    self?.performSnapshot(plan, request: request, showsProgress: true)
+                }
+            } else {
+                performSnapshot(plan, request: request, showsProgress: false)
+            }
+        } catch {
+            postNotice(error.localizedDescription, isError: true)
+        }
+    }
+
+    private func performSnapshot(
+        _ plan: SnapshotRenderPlan,
+        request: SnapshotRequest,
+        showsProgress: Bool
+    ) {
+        do {
+            let pngData = try renderSnapshot(plan)
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            guard pasteboard.setData(pngData, forType: .png) else {
+                throw SnapshotExportError.pngEncodingFailed
+            }
+
+            if showsProgress {
+                postSnapshotProgress(isVisible: false)
+            }
+            isSnapshotExportInProgress = false
+
+            switch request.destination {
+            case .automaticPictures:
+                try saveSnapshotAutomatically(pngData)
+            case .savePanel:
+                saveSnapshotUsingPanel(pngData)
+            }
+        } catch {
+            if showsProgress {
+                postSnapshotProgress(isVisible: false)
+            }
+            isSnapshotExportInProgress = false
+            postNotice(error.localizedDescription, isError: true)
+        }
+    }
+
+    private func postSnapshotProgress(isVisible: Bool) {
+        NotificationCenter.default.post(
+            name: .imageCanvasSnapshotProgress,
+            object: isVisible
+        )
+    }
+
+    private func snapshotContentBounds() -> CGRect? {
+        var result: CGRect?
+
+        for item in board.items {
+            let itemBounds = item.frame.cgRect.standardized
+            result = result.map { $0.union(itemBounds) } ?? itemBounds
+        }
+
+        for stroke in drawingStrokes + (activeDrawingStroke.map { [$0] } ?? []) {
+            guard let firstPoint = stroke.points.first else { continue }
+            var strokeBounds = CGRect(origin: firstPoint, size: .zero)
+            for point in stroke.points.dropFirst() {
+                strokeBounds = strokeBounds.union(CGRect(origin: point, size: .zero))
+            }
+            let inset = max(stroke.lineWidth / 2, 1)
+            strokeBounds = strokeBounds.insetBy(dx: -inset, dy: -inset)
+            result = result.map { $0.union(strokeBounds) } ?? strokeBounds
+        }
+
+        return result
+    }
+
+    private func confirmLargeSnapshot(_ plan: SnapshotRenderPlan) -> Bool {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Export a snapshot larger than 8K?"
+        let memoryDescription = plan.estimatedRawMegabytes.map { " about \($0) MB of raw bitmap memory" }
+            ?? " a very large amount of bitmap memory"
+        alert.informativeText = "The requested image is \(plan.pixelWidth) × \(plan.pixelHeight) pixels and may require\(memoryDescription). ImageCanvas will attempt it if you continue, but the app or system may run out of memory."
+        alert.addButton(withTitle: "Continue")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    func renderSnapshot(_ plan: SnapshotRenderPlan) throws -> Data {
+        let (bytesPerRow, rowOverflow) = plan.pixelWidth.multipliedReportingOverflow(by: 4)
+        guard !rowOverflow else { throw SnapshotExportError.dimensionsOverflow }
+        let (_, totalOverflow) = bytesPerRow.multipliedReportingOverflow(by: plan.pixelHeight)
+        guard !totalOverflow else { throw SnapshotExportError.dimensionsOverflow }
+
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(
+                data: nil,
+                width: plan.pixelWidth,
+                height: plan.pixelHeight,
+                bitsPerComponent: 8,
+                bytesPerRow: bytesPerRow,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else {
+            throw SnapshotExportError.bitmapCreationFailed
+        }
+
+        context.setFillColor(NSColor.black.cgColor)
+        context.fill(CGRect(x: 0, y: 0, width: plan.pixelWidth, height: plan.pixelHeight))
+        context.translateBy(x: 0, y: CGFloat(plan.pixelHeight))
+        context.scaleBy(x: plan.resolutionScale, y: -plan.resolutionScale)
+
+        let graphicsContext = NSGraphicsContext(cgContext: context, flipped: true)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = graphicsContext
+
+        for item in board.items {
+            draw(
+                item,
+                transform: plan.canvasTransform,
+                cullingBounds: CGRect(origin: .zero, size: plan.logicalSize),
+                usesFullResolutionImage: true,
+                includesEditingText: true
+            )
+        }
+        drawDrawingStrokes(transform: plan.canvasTransform)
+
+        NSGraphicsContext.restoreGraphicsState()
+        guard let image = context.makeImage() else {
+            throw SnapshotExportError.bitmapCreationFailed
+        }
+        let representation = NSBitmapImageRep(cgImage: image)
+        guard let data = representation.representation(using: .png, properties: [:]) else {
+            throw SnapshotExportError.pngEncodingFailed
+        }
+        return data
+    }
+
+    private func saveSnapshotAutomatically(_ pngData: Data) throws {
+        guard let picturesDirectory = SnapshotFileNaming.picturesDirectory() else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+
+        let url = SnapshotFileNaming.uniqueURL(
+            boardName: board.name,
+            directory: picturesDirectory
+        )
+        do {
+            try pngData.write(to: url, options: .atomic)
+            postNotice("Snapshot copied and saved to Pictures.", fileURL: url, isError: false)
+        } catch {
+            postNotice(
+                "Snapshot copied, but it could not be saved to Pictures: \(error.localizedDescription)",
+                isError: true
+            )
+        }
+    }
+
+    private func saveSnapshotUsingPanel(_ pngData: Data) {
+        let panel = NSSavePanel()
+        panel.title = "Export Snapshot"
+        panel.prompt = "Export"
+        panel.allowedContentTypes = [.png]
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = SnapshotFileNaming
+            .sanitizedBoardName(board.name)
+            .appending(".png")
+        panel.directoryURL = SnapshotFileNaming.picturesDirectory()
+
+        guard panel.runModal() == .OK, let url = panel.url else {
+            postNotice("Snapshot copied; file export canceled.", isError: false)
+            return
+        }
+
+        do {
+            try pngData.write(to: url, options: .atomic)
+            postNotice("Snapshot copied and exported.", fileURL: url, isError: false)
+        } catch {
+            postNotice(
+                "Snapshot copied, but the file could not be exported: \(error.localizedDescription)",
+                isError: true
+            )
+        }
+    }
+
+    private func postNotice(_ message: String, fileURL: URL? = nil, isError: Bool) {
+        NotificationCenter.default.post(
+            name: .imageCanvasNotice,
+            object: CanvasNotice(message: message, fileURL: fileURL, isError: isError)
+        )
     }
 
     private func applyFolderUpdate(_ items: [BoardItem]) {

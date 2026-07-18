@@ -1,0 +1,283 @@
+{
+  "features" : [
+    "refractivity",
+    "specular-location"
+  ],
+  "fill-specializations" : [
+    {
+      "value" : {
+        "linear-gradient" : [
+          "display-p3:0.70008,0.72723,0.83277,1.00000",
+          "display-p3:0.91722,0.94690,1.00000,1.00000"
+        ],
+        "orientation" : {
+          "start" : {
+            "x" : 0.5,
+            "y" : 1
+          },
+          "stop" : {
+            "x" : 0.5,
+            "y" : 0
+          }
+        }
+      }
+    },
+    {
+      "appearance" : "dark",
+      "value" : {
+        "linear-gradient" : [
+          "display-p3:0.18312,0.17079,0.31202,1.00000",
+          "display-p3:0.15789,0.14594,0.27470,1.00000"
+        ],
+        "orientation" : {
+          "start" : {
+            "x" : 0.5,
+            "y" : 1
+          },
+          "stop" : {
+            "x" : 0.5,
+            "y" : 0
+          }
+        }
+      }
+    }
+  ],
+  "groups" : [
+    {
+      "blend-mode-specializations" : [
+        {
+          "value" : "normal"
+        },
+        {
+          "appearance" : "dark",
+          "value" : "screen"
+        }
+      ],
+      "blur-material" : 1,
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "display-p3:0.51336,0.10500,0.96783,1.00000"
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "display-p3:0.14370,0.04455,0.96783,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "display-p3:0.98195,0.94206,1.00000,1.00000"
+              }
+            }
+          ],
+          "image-name" : "Artboard 1d3.png",
+          "name" : "Artboard 1d3",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              34.5546875,
+              -14.506250000000023
+            ]
+          }
+        },
+        {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "display-p3:0.51336,0.10500,0.96783,1.00000"
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "display-p3:0.14370,0.04455,0.96783,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "display-p3:0.99328,0.94595,1.00000,1.00000"
+              }
+            }
+          ],
+          "image-name" : "Artboard 1d1.png",
+          "name" : "Artboard 1d1"
+        }
+      ],
+      "name" : "Group",
+      "refractivity" : {
+        "depth" : 0.82,
+        "enabled" : true,
+        "strength" : 0.754140625
+      },
+      "shadow" : {
+        "kind" : "layer-color",
+        "opacity" : 0.2
+      },
+      "specular" : "inside",
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.76
+      }
+    },
+    {
+      "blend-mode-specializations" : [
+        {
+          "value" : "screen"
+        },
+        {
+          "appearance" : "dark",
+          "value" : "screen"
+        }
+      ],
+      "blur-material" : 1,
+      "layers" : [
+        {
+          "glass" : true,
+          "hidden" : true,
+          "image-name" : "Artboard 1b1.png",
+          "name" : "Artboard 1b1",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              -36.4453125,
+              62.28125
+            ]
+          }
+        },
+        {
+          "blend-mode" : "plus-lighter",
+          "glass" : true,
+          "image-name" : "Artboard 1c1.png",
+          "name" : "Artboard 1c1",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              1.930128913248609,
+              -23.23308194686672
+            ]
+          }
+        }
+      ],
+      "lighting" : "individual",
+      "name" : "Group",
+      "refractivity" : {
+        "depth" : 0,
+        "enabled" : true,
+        "strength" : 0.02109375
+      },
+      "shadow" : {
+        "kind" : "layer-color",
+        "opacity" : 0.32
+      },
+      "specular" : "inside",
+      "translucency" : {
+        "enabled" : true,
+        "value" : 1
+      }
+    },
+    {
+      "blur-material" : 0,
+      "hidden" : false,
+      "layers" : [
+        {
+          "blend-mode-specializations" : [
+            {
+              "value" : "multiply"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "overlay"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : "overlay"
+            }
+          ],
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "display-p3:0.64949,0.68217,1.00000,1.00000"
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "display-p3:0.18637,0.21512,0.55372,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "display-p3:0.00000,0.00000,0.00000,1.00000"
+              }
+            }
+          ],
+          "glass" : true,
+          "hidden" : false,
+          "image-name" : "Artboard 1a1.png",
+          "name" : "Artboard 1a1",
+          "position" : {
+            "scale" : 0.95,
+            "translation-in-points" : [
+              -49.52959179291611,
+              60.72435887633151
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.6
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 1
+      }
+    },
+    {
+      "blend-mode" : "normal",
+      "blur-material" : 1,
+      "layers" : [
+        {
+          "glass" : true,
+          "hidden" : false,
+          "image-name" : "Artboard 1a1.png",
+          "name" : "Artboard 1a1",
+          "position" : {
+            "scale" : 0.95,
+            "translation-in-points" : [
+              -49.52959179291611,
+              60.72435887633151
+            ]
+          }
+        }
+      ],
+      "refractivity" : {
+        "depth" : 0,
+        "enabled" : true,
+        "strength" : 0.5
+      },
+      "shadow" : {
+        "kind" : "layer-color",
+        "opacity" : 0.24
+      },
+      "specular" : "inside",
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.23
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
