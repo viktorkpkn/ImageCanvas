@@ -7,11 +7,10 @@ ImageCanvas is a native macOS visual reference board for arranging locally store
 ## Features
 
 - Import images from files or folders without modifying the originals.
-- Arrange images with Equalized Tiled Grid, resolution-informed Native Tiled Grid, or equalized Cascading Grid.
+- Three modes of arrangements: Equalized Tiled Grid and Cascading Grid (Collage and Pinterest-Style Columns), and Native grid that retains resolution of the images.
 - Pan, zoom, select, move, resize, rotate, and flip board items.
-- Add persistent text objects with Bold and Italic styling.
-- Add transient, session-only pen drawings.
-- Copy clean board snapshots and save them to Pictures at a configurable resolution.
+- Add persistent text objects with Bold and Italic styling and session-only pen drawings.
+- Board snapshots with configurable resolution. Auto-copied to clipboard and savied to Pictures (by default).
 
 ## Requirements
 
@@ -19,6 +18,10 @@ ImageCanvas is a native macOS visual reference board for arranging locally store
 - If you want to build yourself: Xcode 27 beta 3 or later with the macOS SDK.
 
 Because unsigned releases are not notarized, macOS may block the first launch. Verify that the archive came from the this release page, then use System Settings > Privacy & Security > Open Anyway. Building from source is the preferred path for users who need to inspect the code before running it.
+
+## Some Useful Shortcuts
+
+⌘+\ — hide UI | P — Drawing Tool | V — Move Tool | T — Type Tool
 
 ## Usage example
 
