@@ -14,6 +14,7 @@ extension Notification.Name {
     static let imageCanvasShowSnapshotSettings = Notification.Name("imageCanvasShowSnapshotSettings")
     static let imageCanvasSnapshotProgress = Notification.Name("imageCanvasSnapshotProgress")
     static let imageCanvasNotice = Notification.Name("imageCanvasNotice")
+    static let imageCanvasCheckForUpdates = Notification.Name("imageCanvasCheckForUpdates")
 
     static let imageCanvasFitAll = Notification.Name("imageCanvasFitAll")
     static let imageCanvasZoomIn = Notification.Name("imageCanvasZoomIn")
@@ -21,8 +22,10 @@ extension Notification.Name {
     static let imageCanvasSelectAll = Notification.Name("imageCanvasSelectAll")
     static let imageCanvasRemoveSelected = Notification.Name("imageCanvasRemoveSelected")
     static let imageCanvasRotateSelected = Notification.Name("imageCanvasRotateSelected")
+    static let imageCanvasRotateSelectedCounterclockwise = Notification.Name("imageCanvasRotateSelectedCounterclockwise")
     static let imageCanvasFlipHorizontal = Notification.Name("imageCanvasFlipHorizontal")
     static let imageCanvasFlipVertical = Notification.Name("imageCanvasFlipVertical")
+    static let imageCanvasRevealSelectedInFinder = Notification.Name("imageCanvasRevealSelectedInFinder")
     static let imageCanvasArrangePicasa = Notification.Name("imageCanvasArrangePicasa")
     static let imageCanvasArrangeNativeTiled = Notification.Name("imageCanvasArrangeNativeTiled")
     static let imageCanvasArrangePinterest = Notification.Name("imageCanvasArrangePinterest")

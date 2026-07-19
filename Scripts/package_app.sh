@@ -29,6 +29,8 @@ cp "$ROOT_DIR/Support/Info.plist" "$CONTENTS_DIR/Info.plist"
 printf "APPL????" > "$CONTENTS_DIR/PkgInfo"
 cp "$ROOT_DIR/.build/$CONFIGURATION/ImageCanvas" "$MACOS_DIR/ImageCanvas"
 chmod +x "$MACOS_DIR/ImageCanvas"
+cp "$ROOT_DIR/Support/ImageCanvasUpdateHelper.sh" "$RESOURCES_DIR/ImageCanvasUpdateHelper.sh"
+chmod +x "$RESOURCES_DIR/ImageCanvasUpdateHelper.sh"
 
 xcrun actool "$ROOT_DIR/ImageCanvas.icon" --compile "$RESOURCES_DIR" --output-format human-readable-text --notices --warnings --output-partial-info-plist "$ICON_INFO_PLIST" --app-icon ImageCanvas --enable-on-demand-resources NO --development-region en --target-device mac --minimum-deployment-target 14.0 --platform macosx --bundle-identifier local.imagecanvas.app
 

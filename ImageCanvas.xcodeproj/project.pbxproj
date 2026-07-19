@@ -19,6 +19,8 @@
 		1A000001000000000000000A /* WindowChromeConfigurator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000002000000000000000A /* WindowChromeConfigurator.swift */; };
 		1A000001000000000000000B /* AppPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000002000000000000000F /* AppPreferences.swift */; };
 		1A000001000000000000000C /* SnapshotExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000020000000000000010 /* SnapshotExport.swift */; };
+		1A000001000000000000000D /* AppUpdate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0000020000000000000011 /* AppUpdate.swift */; };
+		1A000001000000000000000E /* ImageCanvasUpdateHelper.sh in Resources */ = {isa = PBXBuildFile; fileRef = 1A0000020000000000000012 /* ImageCanvasUpdateHelper.sh */; };
 		EB2637332FFEEA4E0054B046 /* ImageCanvas.icon in Resources */ = {isa = PBXBuildFile; fileRef = EB2637322FFEEA4E0054B046 /* ImageCanvas.icon */; };
 /* End PBXBuildFile section */
 
@@ -39,6 +41,8 @@
 		1A000002000000000000000E /* ImageCanvas.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ImageCanvas.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A000002000000000000000F /* AppPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPreferences.swift; sourceTree = "<group>"; };
 		1A0000020000000000000010 /* SnapshotExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotExport.swift; sourceTree = "<group>"; };
+		1A0000020000000000000011 /* AppUpdate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdate.swift; sourceTree = "<group>"; };
+		1A0000020000000000000012 /* ImageCanvasUpdateHelper.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = ImageCanvasUpdateHelper.sh; sourceTree = "<group>"; };
 		EB2637322FFEEA4E0054B046 /* ImageCanvas.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = ImageCanvas.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -89,6 +93,7 @@
 				1A000002000000000000000A /* WindowChromeConfigurator.swift */,
 				1A000002000000000000000F /* AppPreferences.swift */,
 				1A0000020000000000000010 /* SnapshotExport.swift */,
+				1A0000020000000000000011 /* AppUpdate.swift */,
 			);
 			path = ImageCanvas;
 			sourceTree = "<group>";
@@ -104,6 +109,7 @@
 			isa = PBXGroup;
 			children = (
 				1A000002000000000000000B /* Info.plist */,
+				1A0000020000000000000012 /* ImageCanvasUpdateHelper.sh */,
 			);
 			path = Support;
 			sourceTree = "<group>";
@@ -183,6 +189,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				EB2637332FFEEA4E0054B046 /* ImageCanvas.icon in Resources */,
+				1A000001000000000000000E /* ImageCanvasUpdateHelper.sh in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -205,6 +212,7 @@
 				1A000001000000000000000A /* WindowChromeConfigurator.swift in Sources */,
 				1A000001000000000000000B /* AppPreferences.swift in Sources */,
 				1A000001000000000000000C /* SnapshotExport.swift in Sources */,
+				1A000001000000000000000D /* AppUpdate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -332,7 +340,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -342,7 +350,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.4.1;
+				MARKETING_VERSION = 0.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = local.imagecanvas.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -357,7 +365,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -367,7 +375,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.4.1;
+				MARKETING_VERSION = 0.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = local.imagecanvas.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

@@ -75,6 +75,102 @@ private struct TextFormattingGlassControl: View {
     }
 }
 
+struct FilenameCalloutLayout {
+    static func frame(
+        itemRect: CGRect,
+        calloutSize: CGSize,
+        canvasBounds: CGRect,
+        gap: CGFloat = 8,
+        edgeInset: CGFloat = 12
+    ) -> CGRect {
+        let availableWidth = max(canvasBounds.width - edgeInset * 2, 0)
+        let size = CGSize(
+            width: min(calloutSize.width, availableWidth),
+            height: min(calloutSize.height, max(canvasBounds.height - edgeInset * 2, 0))
+        )
+        let minimumX = canvasBounds.minX + edgeInset
+        let maximumX = max(canvasBounds.maxX - edgeInset - size.width, minimumX)
+        let centeredX = itemRect.midX - size.width / 2
+        let x = min(max(centeredX, minimumX), maximumX)
+        let preferredY = itemRect.maxY + gap
+        let maximumY = max(canvasBounds.maxY - edgeInset - size.height, canvasBounds.minY + edgeInset)
+        let y = min(max(preferredY, canvasBounds.minY + edgeInset), maximumY)
+        return CGRect(origin: CGPoint(x: x, y: y), size: size)
+    }
+}
+
+enum BoardItemTransform {
+    static func rotated(_ item: BoardItem, clockwise: Bool) -> BoardItem {
+        guard item.isImage else { return item }
+
+        var transformed = item
+        var frame = transformed.frame.cgRect
+        let center = CGPoint(x: frame.midX, y: frame.midY)
+        swap(&frame.size.width, &frame.size.height)
+        frame.origin = CGPoint(x: center.x - frame.width / 2, y: center.y - frame.height / 2)
+        transformed.frame = CanvasRect(frame)
+        let delta = clockwise ? 90 : -90
+        transformed.rotationDegrees = ((transformed.rotationDegrees + delta) % 360 + 360) % 360
+        return transformed
+    }
+
+    static func flipped(_ item: BoardItem, horizontal: Bool) -> BoardItem {
+        guard item.isImage else { return item }
+
+        var transformed = item
+        if horizontal {
+            transformed.isFlippedHorizontally.toggle()
+        } else {
+            transformed.isFlippedVertically.toggle()
+        }
+        return transformed
+    }
+}
+
+private struct FilenameCallout: View {
+    let filename: String
+
+    @ViewBuilder
+    var body: some View {
+        if #available(macOS 26.0, *) {
+            label
+                .glassEffect(.regular, in: Capsule())
+                .overlay {
+                    Capsule()
+                        .stroke(.white.opacity(0.18), lineWidth: 1)
+                }
+                .shadow(color: .black.opacity(0.34), radius: 14, y: 6)
+                .padding(10)
+        } else {
+            label
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay {
+                    Capsule()
+                        .stroke(.white.opacity(0.18), lineWidth: 1)
+                }
+                .shadow(color: .black.opacity(0.34), radius: 14, y: 6)
+                .padding(10)
+        }
+    }
+
+    private var label: some View {
+        Text(filename)
+            .font(.system(size: 15, weight: .medium))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 9)
+            .accessibilityLabel(filename)
+    }
+}
+
+private final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+}
+
 struct CanvasViewRepresentable: NSViewRepresentable {
     var board: BoardProject
     var imageCache: ImageCache
@@ -220,6 +316,12 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
     private var isFinishingTextEdit = false
     private var textFormattingHost: NSHostingView<TextFormattingGlassControl>?
     private var textFormattingControlState: TextFormattingControlState?
+    private var filenameCalloutHost: PassthroughHostingView<FilenameCallout>?
+    private var filenameCalloutItemID: UUID?
+    private var hoverTrackingArea: NSTrackingArea?
+    private var lastHoverPoint: CGPoint?
+    private var isOptionPressed = false
+    private var modifierFlagsMonitor: Any?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -233,6 +335,9 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
 
     deinit {
         observers.forEach(NotificationCenter.default.removeObserver)
+        if let modifierFlagsMonitor {
+            NSEvent.removeMonitor(modifierFlagsMonitor)
+        }
     }
 
     func configure(
@@ -274,6 +379,7 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
         let shouldFitAfterLoad = !didSwitchBoards && wasEmpty && !nextBoard.items.isEmpty
 
         if didSwitchBoards {
+            hideFilenameCallout()
             cancelTextEditing()
             clearDrawingSession()
             pendingUndoSnapshot = nil
@@ -304,6 +410,11 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
         registerForDraggedTypes([.fileURL])
         addNotificationObservers()
         makeTextFormattingHost()
+        makeFilenameCalloutHost()
+        modifierFlagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.handleModifierFlagsChanged(event)
+            return event
+        }
     }
 
     private func addNotificationObservers() {
@@ -313,9 +424,11 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
         observers.append(center.addObserver(forName: .imageCanvasZoomOut, object: nil, queue: .main) { [weak self] _ in self?.zoomOut() })
         observers.append(center.addObserver(forName: .imageCanvasSelectAll, object: nil, queue: .main) { [weak self] _ in self?.selectAll() })
         observers.append(center.addObserver(forName: .imageCanvasRemoveSelected, object: nil, queue: .main) { [weak self] _ in self?.removeSelected() })
-        observers.append(center.addObserver(forName: .imageCanvasRotateSelected, object: nil, queue: .main) { [weak self] _ in self?.rotateSelected() })
+        observers.append(center.addObserver(forName: .imageCanvasRotateSelected, object: nil, queue: .main) { [weak self] _ in self?.rotateSelected(clockwise: true) })
+        observers.append(center.addObserver(forName: .imageCanvasRotateSelectedCounterclockwise, object: nil, queue: .main) { [weak self] _ in self?.rotateSelected(clockwise: false) })
         observers.append(center.addObserver(forName: .imageCanvasFlipHorizontal, object: nil, queue: .main) { [weak self] _ in self?.flipSelected(horizontal: true) })
         observers.append(center.addObserver(forName: .imageCanvasFlipVertical, object: nil, queue: .main) { [weak self] _ in self?.flipSelected(horizontal: false) })
+        observers.append(center.addObserver(forName: .imageCanvasRevealSelectedInFinder, object: nil, queue: .main) { [weak self] _ in self?.revealSelectedInFinder() })
         observers.append(center.addObserver(forName: .imageCanvasArrangePicasa, object: nil, queue: .main) { [weak self] _ in
             self?.arrange(.equalizedTiled)
         })
@@ -338,16 +451,37 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
             guard let items = notification.object as? [BoardItem] else { return }
             self?.applyFolderUpdate(items)
         })
+        observers.append(center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.hideFilenameCallout()
+        })
     }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         window?.makeFirstResponder(self)
+        window?.acceptsMouseMovedEvents = true
+        hideFilenameCallout()
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverTrackingArea {
+            removeTrackingArea(hoverTrackingArea)
+        }
+        let trackingArea = NSTrackingArea(
+            rect: .zero,
+            options: [.activeInKeyWindow, .inVisibleRect, .mouseEnteredAndExited, .mouseMoved],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(trackingArea)
+        hoverTrackingArea = trackingArea
     }
 
     override func layout() {
         super.layout()
         updateTextEditorFrame()
+        updateFilenameCallout()
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -371,6 +505,23 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
         drawSelectionOutlines()
         drawMarquee()
         updateTextFormattingControl()
+        updateFilenameCallout()
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        lastHoverPoint = convert(event.locationInWindow, from: nil)
+        isOptionPressed = event.modifierFlags.contains(.option)
+        updateFilenameCallout()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        lastHoverPoint = nil
+        hideFilenameCallout()
+    }
+
+    override func flagsChanged(with event: NSEvent) {
+        handleModifierFlagsChanged(event)
+        super.flagsChanged(with: event)
     }
 
     private func draw(
@@ -648,6 +799,65 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
         textFormattingHost = host
     }
 
+    private func makeFilenameCalloutHost() {
+        let host = PassthroughHostingView(rootView: FilenameCallout(filename: ""))
+        host.isHidden = true
+        addSubview(host, positioned: .above, relativeTo: nil)
+        filenameCalloutHost = host
+    }
+
+    private func handleModifierFlagsChanged(_ event: NSEvent) {
+        guard window?.isKeyWindow == true else {
+            hideFilenameCallout()
+            return
+        }
+
+        isOptionPressed = event.modifierFlags.contains(.option)
+        if isOptionPressed, let window {
+            lastHoverPoint = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+            updateFilenameCallout()
+        } else {
+            hideFilenameCallout()
+        }
+    }
+
+    private func updateFilenameCallout() {
+        guard isOptionPressed,
+              NSApplication.shared.isActive,
+              window?.isKeyWindow == true,
+              let point = lastHoverPoint,
+              bounds.contains(point),
+              let item = item(at: canvasPoint(from: point)),
+              item.isImage,
+              let host = filenameCalloutHost else {
+            hideFilenameCallout()
+            return
+        }
+
+        if filenameCalloutItemID != item.id {
+            host.rootView = FilenameCallout(filename: item.fileName)
+            filenameCalloutItemID = item.id
+        }
+
+        host.layoutSubtreeIfNeeded()
+        let fittingSize = host.fittingSize
+        let size = CGSize(
+            width: min(max(fittingSize.width, 120), max(bounds.width - 24, 0)),
+            height: max(fittingSize.height, 54)
+        )
+        host.frame = FilenameCalloutLayout.frame(
+            itemRect: screenRect(for: item.frame.cgRect),
+            calloutSize: size,
+            canvasBounds: bounds
+        )
+        host.isHidden = false
+    }
+
+    private func hideFilenameCallout() {
+        filenameCalloutHost?.isHidden = true
+        filenameCalloutItemID = nil
+    }
+
     private func updateTextFormattingControl() {
         guard areControlsVisible,
               editingTextID == nil,
@@ -734,6 +944,7 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
         onCanvasInteraction?()
+        hideFilenameCallout()
 
         let screenPoint = convert(event.locationInWindow, from: nil)
         finishTextEditing()
@@ -871,6 +1082,85 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
         finishInteraction()
     }
 
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let point = convert(event.locationInWindow, from: nil)
+        guard let item = item(at: canvasPoint(from: point)), item.isImage else {
+            return nil
+        }
+
+        finishTextEditing()
+        hideFilenameCallout()
+        if !selectedIDs.contains(item.id) {
+            selectedIDs = [item.id]
+            needsDisplay = true
+        }
+
+        let menu = NSMenu()
+        menu.addItem(contextMenuItem(
+            title: "Rotate Clockwise",
+            action: #selector(contextRotateClockwise),
+            keyEquivalent: "r",
+            modifiers: [.command]
+        ))
+        menu.addItem(contextMenuItem(
+            title: "Rotate Counterclockwise",
+            action: #selector(contextRotateCounterclockwise),
+            keyEquivalent: "r",
+            modifiers: [.command, .shift]
+        ))
+        menu.addItem(.separator())
+        menu.addItem(contextMenuItem(
+            title: "Flip Horizontal",
+            action: #selector(contextFlipHorizontal),
+            keyEquivalent: "f",
+            modifiers: [.command]
+        ))
+        menu.addItem(contextMenuItem(
+            title: "Flip Vertical",
+            action: #selector(contextFlipVertical),
+            keyEquivalent: "f",
+            modifiers: [.command, .shift]
+        ))
+        menu.addItem(.separator())
+        menu.addItem(contextMenuItem(
+            title: "Reveal in Finder",
+            action: #selector(contextRevealInFinder)
+        ))
+        return menu
+    }
+
+    private func contextMenuItem(
+        title: String,
+        action: Selector,
+        keyEquivalent: String = "",
+        modifiers: NSEvent.ModifierFlags = []
+    ) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: keyEquivalent)
+        item.target = self
+        item.keyEquivalentModifierMask = modifiers
+        return item
+    }
+
+    @objc private func contextRotateClockwise() {
+        rotateSelected(clockwise: true)
+    }
+
+    @objc private func contextRotateCounterclockwise() {
+        rotateSelected(clockwise: false)
+    }
+
+    @objc private func contextFlipHorizontal() {
+        flipSelected(horizontal: true)
+    }
+
+    @objc private func contextFlipVertical() {
+        flipSelected(horizontal: false)
+    }
+
+    @objc private func contextRevealInFinder() {
+        revealSelectedInFinder()
+    }
+
     override func otherMouseDown(with event: NSEvent) {
         guard event.buttonNumber == 2 else {
             super.otherMouseDown(with: event)
@@ -967,7 +1257,9 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
                     return false
                 }
             case "r":
-                rotateSelected()
+                rotateSelected(clockwise: !flags.contains(.shift))
+            case "f":
+                flipSelected(horizontal: !flags.contains(.shift))
             default:
                 return false
             }
@@ -1377,35 +1669,39 @@ final class ImageCanvasNSView: NSView, NSTextFieldDelegate {
         }
     }
 
-    private func rotateSelected() {
-        guard !selectedIDs.isEmpty else { return }
-        let ids = selectedIDs
+    private func rotateSelected(clockwise: Bool) {
+        let ids = Set(board.items.filter { $0.isImage && selectedIDs.contains($0.id) }.map(\.id))
+        guard !ids.isEmpty else { return }
 
         mutateWithUndo {
             for index in board.items.indices where ids.contains(board.items[index].id) {
-                var frame = board.items[index].frame.cgRect
-                let center = CGPoint(x: frame.midX, y: frame.midY)
-                swap(&frame.size.width, &frame.size.height)
-                frame.origin = CGPoint(x: center.x - frame.width / 2, y: center.y - frame.height / 2)
-                board.items[index].frame = CanvasRect(frame)
-                board.items[index].rotationDegrees = (board.items[index].rotationDegrees + 90) % 360
+                board.items[index] = BoardItemTransform.rotated(board.items[index], clockwise: clockwise)
             }
         }
     }
 
     private func flipSelected(horizontal: Bool) {
-        guard !selectedIDs.isEmpty else { return }
-        let ids = selectedIDs
+        let ids = Set(board.items.filter { $0.isImage && selectedIDs.contains($0.id) }.map(\.id))
+        guard !ids.isEmpty else { return }
 
         mutateWithUndo {
             for index in board.items.indices where ids.contains(board.items[index].id) {
-                if horizontal {
-                    board.items[index].isFlippedHorizontally.toggle()
-                } else {
-                    board.items[index].isFlippedVertically.toggle()
-                }
+                board.items[index] = BoardItemTransform.flipped(board.items[index], horizontal: horizontal)
             }
         }
+    }
+
+    private func revealSelectedInFinder() {
+        let urls = board.items
+            .filter { $0.isImage && selectedIDs.contains($0.id) }
+            .map { URL(fileURLWithPath: $0.filePath).standardizedFileURL }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+
+        guard !urls.isEmpty else {
+            NSSound.beep()
+            return
+        }
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
     }
 
     private func arrange(_ kind: ArrangementKind) {

@@ -2,6 +2,13 @@
 
 All notable changes are documented in this file.
 
+## 0.5.0 - 2026-07-19
+
+- Added an Option-hover filename capsule that floats below the image and remains readable at every canvas zoom level.
+- Added selection-aware image context commands for clockwise and counterclockwise rotation, horizontal and vertical flipping, and Reveal in Finder, with matching Selection-menu shortcuts and undo support.
+- Added a manual latest-stable-release check under the ImageCanvas menu, including GitHub-published SHA-256 validation, app identity and version checks, writable-app replacement and relaunch, rollback on failure, and a manual GitHub fallback.
+- Preserved macOS 14 support and updated the release to version 0.5.0 build 4.
+
 ## 0.4.1 - 2026-07-18
 
 - Restored the original compact Picasa arrangement as Equalized Tiled Grid.

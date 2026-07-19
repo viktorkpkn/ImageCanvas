@@ -9,6 +9,12 @@ struct ImageCanvasApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") {
+                    post(.imageCanvasCheckForUpdates)
+                }
+            }
+
             ImageCanvasArrangementCommands()
 
             CommandGroup(replacing: .newItem) {
@@ -117,17 +123,30 @@ struct ImageCanvasApp: App {
 
                 Divider()
 
-                Button("Rotate 90 Degrees") {
+                Button("Rotate Clockwise") {
                     post(.imageCanvasRotateSelected)
                 }
                 .keyboardShortcut("r", modifiers: .command)
 
+                Button("Rotate Counterclockwise") {
+                    post(.imageCanvasRotateSelectedCounterclockwise)
+                }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
+
                 Button("Flip Horizontal") {
                     post(.imageCanvasFlipHorizontal)
                 }
+                .keyboardShortcut("f", modifiers: .command)
 
                 Button("Flip Vertical") {
                     post(.imageCanvasFlipVertical)
+                }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+
+                Divider()
+
+                Button("Reveal in Finder") {
+                    post(.imageCanvasRevealSelectedInFinder)
                 }
 
                 Divider()

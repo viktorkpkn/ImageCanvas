@@ -13,6 +13,7 @@ struct ContentView: View {
     @State private var isLargeSnapshotExporting = false
     @State private var canvasNotice: CanvasNotice?
     @StateObject private var drawingColorPicker = DrawingColorPickerModel(color: .yellow)
+    @StateObject private var updateController = AppUpdateController()
     @AppStorage(SnapshotPreferences.scaleKey) private var snapshotScale = Double(SnapshotPreferences.defaultScale)
     @AppStorage(SnapshotPreferences.captureCurrentViewKey) private var capturesCurrentView = false
 
@@ -58,6 +59,11 @@ struct ContentView: View {
         .sheet(isPresented: $isSnapshotSettingsPresented) {
             snapshotSettingsSheet
         }
+        .sheet(isPresented: $updateController.isPresented) {
+            AppUpdateSheet(controller: updateController) {
+                store.saveCurrentBoard()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .imageCanvasAddImages)) { _ in
             addImages()
         }
@@ -82,6 +88,9 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .imageCanvasShowSnapshotSettings)) { _ in
             isSnapshotSettingsPresented = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .imageCanvasCheckForUpdates)) { _ in
+            updateController.presentAndCheck()
         }
         .onReceive(NotificationCenter.default.publisher(for: .imageCanvasSnapshotProgress)) { notification in
             guard let isExporting = notification.object as? Bool else { return }
