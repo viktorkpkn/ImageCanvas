@@ -7,14 +7,14 @@ ImageCanvas is a native macOS visual reference board for arranging locally store
 ## Features
 
 - Import images from files or folders without modifying the originals.
-- Arrange images with Equalized Tiled Grid, resolution-informed Native Tiled Grid, or Cascading Grid.
-- Hold Option while hovering over an image to reveal its complete filename.
-- Rotate, flip, or reveal selected images in Finder from the context or Selection menu.
+- Three modes of arrangements: Equalized Tiled Grid and Cascading Grid (Collage and Pinterest-Style Columns), and Native grid that retains resolution of the images.
 - Pan, zoom, select, move, resize, rotate, and flip board items.
 - Add persistent text objects with Bold and Italic styling and session-only pen drawings.
-- Create clean board snapshots at a configurable resolution. Snapshots are copied to the clipboard and saved to Pictures by default.
+- Board snapshots with configurable resolution. Auto-copied to clipboard and savied to Pictures (by default).
+- Supported image formats: ```.jpg``` ```.jpeg``` ```.png``` ```.gif``` ```.webp``` ```.heic``` ```.heif```
+- Hold Option while hovering over an image to reveal its complete filename.
+- Rotate, flip, or reveal selected images in Finder from the context or Selection menu.
 - Check for the latest stable release manually from the ImageCanvas menu, with automatic replacement available for writable installations.
-- Supported image formats: `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.heic`, and `.heif`.
 
 ## Requirements
 
@@ -39,9 +39,9 @@ The built-in updater checks only the latest stable GitHub Release when requested
 | ⇧+⌘+F | Flip vertically |
 | ⌘+1 | Fit the board in the window |
 
-## Usage example
+## Reason it exists
 
-ImageCanvas grew out of a recurring problem: previewing hundreds of mixed files in Downloads while trying to find one particular image. It can open a folder, ignore everything that is not an image, and arrange the results as a visual board—closer to working in Figma or PureRef than browsing a file list. The same lightweight organizing tools are useful when a group of references needs to be prepared quickly for a presentation or screen-sharing call.
+I was constantly facing an issue with previewing a large number of images, primarily in the Downloads folder, and spent a lot of time finding a specific image among hundreds of others. This tool allows me to select a folder containing any mix of files and preview only the images inside it in a way I used to organize them in Figma / PureRef. In addition to that it has simple organizing functions for when, say, you would want to share your screen on a Zoom call and quickly show something.  
 
 ## Development Notes
 
