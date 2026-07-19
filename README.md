@@ -11,6 +11,7 @@ ImageCanvas is a native macOS visual reference board for arranging locally store
 - Pan, zoom, select, move, resize, rotate, and flip board items.
 - Add persistent text objects with Bold and Italic styling and session-only pen drawings.
 - Board snapshots with configurable resolution. Auto-copied to clipboard and savied to Pictures (by default).
+- Supported image formats: ```.jpg``` ```.jpeg``` ```.png``` ```.gif``` ```.webp``` ```.heic``` ```.heif```
 
 ## Requirements
 
