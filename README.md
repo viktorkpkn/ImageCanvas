@@ -6,7 +6,7 @@ ImageCanvas is a native macOS visual reference board for arranging locally store
 
 ## Features
 
-- Import images from files or folders without modifying the originals.
+- Review images from files or folders without modifying the originals — files are never loaded in the app memory and being called from the disk.
 - Three modes of arrangements: Equalized Tiled Grid and Cascading Grid (Collage and Pinterest-Style Columns), and Native grid that retains resolution of the images.
 - Pan, zoom, select, move, resize, rotate, and flip board items.
 - Add persistent text objects with Bold and Italic styling and session-only pen drawings.
